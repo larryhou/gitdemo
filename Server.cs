@@ -440,7 +440,7 @@ namespace TheNextMoba.Network
 			Serializer.Serialize<T> (stream, message);
 
 			byte[] data = protocol.EncodePackage (stream.GetBuffer ());
-			Log ("Send " + protocol.ToString ());
+			Log ("Send >> " + protocol.ToString ());
 
 			ApolloResult result;
 			if (_type == ProtocolType.TCP) 
@@ -526,14 +526,14 @@ namespace TheNextMoba.Network
 				if (type != null)
 				{
 					// Deserialize Message
-					Log ("[RSP-BODY]command : " + _protocol.command + " message_length : " + _protocol.message.Length + " type : " + type);
+					Log (string.Format("<< [RSP-BODY]command:0x{0:X}/{0} message_length:{1} type:{2}", _protocol.command, _protocol.message.Length, type));
 					MemoryStream stream = new MemoryStream (_protocol.message);
 					message = Serializer.NonGeneric.Deserialize (type, stream);
 				} 
 				else
 				{
 					// Extract Message Raw Bytes
-					Log ("[RSP-BODY]command : " + _protocol.command + " message_length : " + _protocol.message.Length + " type : RAW_BYTES");
+					Log (string.Format("<< [RSP-BODY]command:0x{0:X}/{0} message_length:{1} type:RAW_BYTES", _protocol.command, _protocol.message.Length));
 					message = _protocol.message.Clone ();
 				}
 
