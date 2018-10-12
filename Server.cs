@@ -10,7 +10,8 @@ using Apollo;
 
 namespace TheNextMoba.Network
 {
-	public delegate void ConnectHandlerrrrr(ConnectEventType type, ApolloResult result);
+
+	public delegate void ConnectHandler(ConnectEventType type, ApolloResult result);
 	public delegate void NetworkMessageHandle(object message);
 
 	public enum ProtocolType:int
