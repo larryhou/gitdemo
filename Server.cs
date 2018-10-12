@@ -46,7 +46,7 @@ namespace TheNextMoba.Network
 
 		public byte[] EncodePackage(byte[] message)
 		{
-			length = HEAD_LENGTH + message.Length;
+			length = HEAD_LENGTH + (uint)message.Length;
 			byte[] result = new byte[length];
 			uint position = 0;
 
@@ -59,7 +59,7 @@ namespace TheNextMoba.Network
 			EncodeUInt16 (checksum	, result, ref position);
 			EncodeUInt32 (index		, result, ref position);
 
-			Assert.AreEqual (HEAD_LENGTH, result.Length);
+			Assert.AreEqual (HEAD_LENGTH, (uint)result.Length);
 			Assert.AreEqual (HEAD_LENGTH, position);
 
 			Array.Copy (message, 0, result, position, message.Length);
