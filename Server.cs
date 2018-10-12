@@ -161,8 +161,18 @@ namespace TheNextMoba.Network
 
 		public void Clear()
 		{
-			_remain = null;
-			_buffer = null;
+			if (_remain != null) 
+			{
+				Array.Clear (_remain, 0, _remain.Length);
+				_remain = null;
+			}
+
+			if (_buffer != null) 
+			{
+				Array.Clear (_buffer, 0, _buffer.Length);
+				_buffer = null;
+			}
+
 			_bytesReceived = 0;
 			_headComplete = false;
 			_bodyComplete = false;
