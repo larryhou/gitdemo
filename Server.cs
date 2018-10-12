@@ -20,7 +20,7 @@ namespace TheNextMoba.Network
 
 	public enum ConnectEventType:int
 	{
-		Connect = 0, Send, Receive, Error, Reconnect, Disconnect
+		Connect = 0, Send, Read, Error, Reconnect, Disconnect
 	}
 
 	public class MessageObject
@@ -146,6 +146,7 @@ namespace TheNextMoba.Network
 				}
 			}
 
+			Array.Clear (data, 0, data.Length);
 			return _headComplete && _bodyComplete;
 		}
 
@@ -470,7 +471,7 @@ namespace TheNextMoba.Network
 					ReadConnectionStream (buffer);
 				}
 
-				DispatchConnectEvent (ConnectEventType.Receive, result);
+				DispatchConnectEvent (ConnectEventType.Read, result);
 			}
 		}
 
