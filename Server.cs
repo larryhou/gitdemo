@@ -99,7 +99,7 @@ namespace TheNextMoba.Network
 
 			_bytesReceived += (uint)data.Length;
 
-			byte[] bytes;
+			byte[] bytes = new byte[1];
 			if (!_headComplete)
 			{
 				if (_bytesReceived >= HEAD_LENGTH) 
@@ -307,7 +307,7 @@ namespace TheNextMoba.Network
 						MessageObject msg = _messages [i];
 
 						NetworkMessageHandle handle;
-						if (_messageHandles.TryGetValue (msg.command, handle)) 
+						if (_messageHandles.TryGetValue (msg.command, out handle)) 
 						{
 							try
 							{
@@ -437,11 +437,11 @@ namespace TheNextMoba.Network
 			ApolloResult result;
 			if (_type == ProtocolType.TCP) 
 			{
-				result = _connector.ReadData (buffer);
+				result = _connector.ReadData (out buffer);
 			}
 			else 
 			{
-				result = _connector.ReadUdpData (buffer);
+				result = _connector.ReadUdpData (out buffer);
 			}
 
 			if (_protocol == null) 
