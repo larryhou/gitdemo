@@ -405,9 +405,14 @@ namespace TheNextMoba.Network
 				_connector.DisconnectEvent -= new DisconnectEventHandler(ApolloDisconnectHandle);
 				_connector.ReconnectEvent -= new ReconnectEventHandler (ApolloReconnectHandle);
 				_connector.Disconnect ();
+				_connector = null;
 			}
 
-			_connector = null;
+			if (_protocol != null) 
+			{
+				_protocol.Clear ();
+				_protocol = null;
+			}
 		}
 
 		public bool Connected
