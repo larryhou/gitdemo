@@ -8,7 +8,7 @@ using Apollo;
 
 namespace TheNextMoba.Network
 {
-	enum ProtocolType:int
+	public enum ProtocolType:int
 	{
 		TCP = 0,UDP
 	}
@@ -44,8 +44,8 @@ namespace TheNextMoba.Network
 			};
 
 			_connector.SetSecurityInfo (ApolloEncryptMethod.Aes, ApolloKeyMaking.RawDH, dhp);
-			ApolloResult result = _connector.Connect ();
-			Debug.Log (result);
+			ApolloResult r = _connector.Connect ();
+			Debug.Log (r);
 		}
 	}
 }
