@@ -422,7 +422,10 @@ namespace TheNextMoba.Network
 				_connector.ErrorEvent -= new ConnectorErrorEventHandler (ApolloErrorHandle);
 				_connector.DisconnectEvent -= new DisconnectEventHandler(ApolloDisconnectHandle);
 				_connector.ReconnectEvent -= new ReconnectEventHandler (ApolloReconnectHandle);
-				_connector.Disconnect ();
+				if (_connector.Connected) 
+				{
+					_connector.Disconnect ();
+				}
 				_connector = null;
 			}
 
@@ -471,7 +474,7 @@ namespace TheNextMoba.Network
 				Type type = GetTypeByCommand(_protocol.command);
 				if (type != null) 
 				{
-					Debug.Log("[RSP-BODY]command : " + _protocol.command + "message_length : " + _protocol.message.Length + " type : " + type);
+					Debug.Log("[RSP-BODY]command : " + _protocol.command + " message_length : " + _protocol.message.Length + " type : " + type);
 					MemoryStream stream = new MemoryStream(_protocol.message);
 					object message = Serializer.NonGeneric.Deserialize (type, stream);
 					TriggerHandlesWithMessage (_protocol.command, message);
