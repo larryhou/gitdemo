@@ -10,18 +10,22 @@ using Apollo;
 
 namespace TheNextMoba.Network
 {
-
-	public delegate void ConnectHandler(ConnectEventType type, ApolloResult result);
-	public delegate void NetworkMessageHandle(object message);
+	public delegate void NetworkConnectHandler(ConnectEventType type, ApolloResult result);
+	public delegate void NetworkMessageHandler(object message);
 
 	public enum ProtocolType:int
 	{
-		TCP = 0,UDP
+		TCP = 0,UDP = 1
 	}
 
 	public enum ConnectEventType:int
 	{
 		CONNECT = 0, SEND, READ, ERROR, RECONNECT, DISCONNECT
+	}
+
+	public class NetworkVars
+	{
+		public const uint MAX_RETRY_NUM = 3;
 	}
 
 	public class MessageObject
@@ -45,9 +49,9 @@ namespace TheNextMoba.Network
 
 		public byte[] message;
 
-		public string ToString()
+		override public string ToString()
 		{
-			return string.Format ("ProtocolPackage index:{1} command:{2:X} length:{3} uin:{4} version:{5} appID:{6} zoneID:{7} checksum:{8}", index, command, length, uin, version, appID, zoneID, checksum);
+			return string.Format ("ProtocolPackage index:{0} command:0x{1:X}/{1} length:{2} uin:{3} version:{4} appID:{5} zoneID:{6} checksum:{7}", index, command, length, uin, version, appID, zoneID, checksum);
 		}
 
 		public byte[] EncodePackage(byte[] message)
@@ -163,9 +167,7 @@ namespace TheNextMoba.Network
 		{
 			if (_headComplete && _bodyComplete) 
 			{
-				byte[] bytes = new byte[_remain.Length];
-				Array.Copy (_remain, bytes, _remain.Length);
-				return bytes;
+				return _remain.Clone() as byte[];
 			}
 
 			return null;
@@ -225,18 +227,18 @@ namespace TheNextMoba.Network
 		}
 	}
 
-	public class Server:SingletonMono<Server>
-	{
+	public class Server<Y> where Y : Server<Y>, new()
+	{	
 		private IApolloConnector _connector;
 		private string _dhp = "C0FC17D2ADC0007C512E9B6187823F559595D953C82D3D4F281D5198E86C79DF14FAB1F2A901F909FECB71B147DBD265837A254B204D1B5BC5FD64BF804DCD03";
 
-		private ConnectHandle _connectHandle;
+		private NetworkConnectHandler _connectHandler;
 		private ProtocolPackage _protocol;
 		private ProtocolType _type;
 		private uint _sequence;
 
 		private Dictionary<ushort, Type> _commandRegisterMap = new Dictionary<ushort, Type>();
-		private Dictionary<ushort, NetworkMessageHandle> _messageHandles = new Dictionary<ushort, NetworkMessageHandle>();
+		private Dictionary<ushort, NetworkMessageHandler> _messageHandles = new Dictionary<ushort, NetworkMessageHandler>();
 
 		private List<MessageObject> _messages = new List<MessageObject>();
 
@@ -246,6 +248,21 @@ namespace TheNextMoba.Network
 		{
 			ApolloInfo info = new ApolloInfo (102400);
 			IApollo.Instance.Initialize (info);
+		}
+
+		//MARK: Singleton Implements
+		protected static Y _insance;
+		public static Y Instance
+		{
+			get 
+			{
+				if (_insance == null)
+				{
+					_insance = new Y ();
+				}
+
+				return _insance;
+			}
 		}
 
 		//MARK: Manage Command Registers
@@ -283,23 +300,23 @@ namespace TheNextMoba.Network
 		}
 
 		//MARK: Manage Message Handlers
-		public void AddMessageHandle(ushort command, NetworkMessageHandle handle)
+		public void AddMessageHandler(ushort command, NetworkMessageHandler handler)
 		{
 			if (!_messageHandles.ContainsKey (command)) 
 			{
-				_messageHandles.Add (command, handle);
+				_messageHandles.Add (command, handler);
 			}
 			else 
 			{
-				_messageHandles [command] += handle;
+				_messageHandles [command] += handler;
 			}
 		}
 
-		public void RemoveMessageHandle(ushort command, NetworkMessageHandle handle)
+		public void RemoveMessageHandler(ushort command, NetworkMessageHandler handler)
 		{
 			if (_messageHandles.ContainsKey (command)) 
 			{
-				_messageHandles [command] -= handle;
+				_messageHandles [command] -= handler;
 			}
 		}
 
@@ -325,7 +342,7 @@ namespace TheNextMoba.Network
 					{
 						MessageObject msg = _messages [i];
 
-						NetworkMessageHandle handle;
+						NetworkMessageHandler handle;
 						if (_messageHandles.TryGetValue (msg.command, out handle)) 
 						{
 							try
@@ -348,22 +365,145 @@ namespace TheNextMoba.Network
 		}
 
 		//MARK: Manage Connect Event Listeners
-		public void AddConnectHandle(ConnectHandle handle)
+		public void AddConnectHandler(NetworkConnectHandler handler)
 		{
-			_connectHandle -= handle;
-			_connectHandle += handle;
+			_connectHandler -= handler;
+			_connectHandler += handler;
 		}
 
-		public void RemoveConnectHandle(ConnectHandle handle)
+		public void RemoveConnectHandler(NetworkConnectHandler handler)
 		{
-			_connectHandle -= handle;
+			_connectHandler -= handler;
+		}
+
+		public bool Connected
+		{
+			get { return _connector != null && _connector.Connected; }
+		}
+
+		private void DispatchConnectEvent(ConnectEventType type, ApolloResult result)
+		{
+			Debug.Log (string.Format ("ConnectEventType.{0} : ApolloResult.{1}", type, result));
+
+			if (_connectHandler != null) 
+			{
+				_connectHandler (type, result);
+			}
+		}
+
+		//MARK: Parsing Data Stream
+		private void ApolloRecievedDataEventHandler()
+		{
+			ApolloResult result = ApolloResult.Success;
+
+			while (result == ApolloResult.Success) 
+			{
+				byte[] buffer;
+				if (_type == ProtocolType.TCP) 
+				{
+					result = _connector.ReadData (out buffer);
+				}
+				else 
+				{
+					result = _connector.ReadUdpData (out buffer);
+				}
+
+				if (result == ApolloResult.Success) 
+				{
+					ReadConnectionStream (buffer);
+				}
+
+				DispatchConnectEvent (ConnectEventType.READ, result);
+			}
+		}
+
+		private void ReadConnectionStream(byte[] buffer)
+		{
+			if (_protocol.ReadConnectionStream(buffer))
+			{
+				byte[] remain = _protocol.StripRemainBytes ();
+
+				Type type = GetTypeByCommand(_protocol.command);
+
+				object message;
+				if (type != null)
+				{
+					// Deserialize Message
+					Debug.Log ("[RSP-BODY]command : " + _protocol.command + " message_length : " + _protocol.message.Length + " type : " + type);
+					MemoryStream stream = new MemoryStream (_protocol.message);
+					message = Serializer.NonGeneric.Deserialize (type, stream);
+				} 
+				else
+				{
+					// Extract Message Raw Bytes
+					Debug.Log ("[RSP-BODY]command : " + _protocol.command + " message_length : " + _protocol.message.Length + " type : RAW_BYTES");
+					message = _protocol.message.Clone ();
+				}
+
+				TriggerHandlesWithMessage (_protocol.command, message);
+
+				_protocol.Clear ();
+				if (remain != null)
+				{
+					ReadConnectionStream (remain);
+				}
+			}
+			else if (_protocol.HeadComplete)
+			{
+				Debug.Log ("[RSP-HEAD]" + _protocol.ToString());
+			}
+		}
+
+		//MARK: Connection Events Handle
+		private void ApolloConnectHandler(ApolloResult result, ApolloLoginInfo loginInfo)
+		{
+			DispatchConnectEvent (ConnectEventType.CONNECT, result);
+			Debug.Log (loginInfo);
+		}
+
+		private void ApolloErrorHandler(ApolloResult result)
+		{
+			DispatchConnectEvent (ConnectEventType.ERROR, result);
+		}
+
+		private void ApolloDisconnectHandler(ApolloResult result)
+		{
+			DispatchConnectEvent (ConnectEventType.DISCONNECT, result);
+		}
+
+		private void ApolloReconnectHandler(ApolloResult result)
+		{
+			DispatchConnectEvent (ConnectEventType.RECONNECT, result);
 		}
 
 		//MARK: Connect Operations
-		public void Connect(string ip, int port, ProtocolType type = ProtocolType.UDP, string dhp = null)
+		public void Close()
+		{
+			if (_connector != null) 
+			{
+				_connector.ConnectEvent -= new ConnectEventHandler (ApolloConnectHandler);
+				_connector.RecvedDataEvent -= new RecvedDataHandler(ApolloRecievedDataEventHandler);
+				_connector.ErrorEvent -= new ConnectorErrorEventHandler (ApolloErrorHandler);
+				_connector.DisconnectEvent -= new DisconnectEventHandler(ApolloDisconnectHandler);
+				_connector.ReconnectEvent -= new ReconnectEventHandler (ApolloReconnectHandler);
+				if (_connector.Connected) 
+				{
+					_connector.Disconnect ();
+				}
+				_connector = null;
+			}
+
+			if (_protocol != null) 
+			{
+				_protocol.Clear ();
+				_protocol = null;
+			}
+		}
+
+		public void Connect(string ip, uint port, ProtocolType type, string dhp = null)
 		{
 			_type = type;
-			Debug.Log (string.Format ("Connect ProtocolType.{1} ip:{2} port:{3} dhp:{4 }", type, ip, port, dhp));
+			Debug.Log (string.Format ("Connect ProtocolType.{0} ip:{1} port:{2} dhp:{3}", type, ip, port, dhp));
 
 			_sequence = 0;
 			_protocol = new ProtocolPackage ();
@@ -380,11 +520,11 @@ namespace TheNextMoba.Network
 				_connector = IApollo.Instance.CreateApolloConnection (ApolloPlatform.None, "tcp://" + ip + ":" + port);
 			}
 
-			_connector.ConnectEvent += new ConnectEventHandler (ApolloConnectHandle);
-			_connector.RecvedDataEvent += new RecvedDataHandler(ApolloRecievedDataEventHandle);
-			_connector.ErrorEvent += new ConnectorErrorEventHandler (ApolloErrorHandle);
-			_connector.DisconnectEvent += new DisconnectEventHandler(ApolloDisconnectHandle);
-			_connector.ReconnectEvent += new ReconnectEventHandler (ApolloReconnectHandle);
+			_connector.ConnectEvent += new ConnectEventHandler (ApolloConnectHandler);
+			_connector.RecvedDataEvent += new RecvedDataHandler(ApolloRecievedDataEventHandler);
+			_connector.ErrorEvent += new ConnectorErrorEventHandler (ApolloErrorHandler);
+			_connector.DisconnectEvent += new DisconnectEventHandler(ApolloDisconnectHandler);
+			_connector.ReconnectEvent += new ReconnectEventHandler (ApolloReconnectHandler);
 
 			_connector.SetSecurityInfo (ApolloEncryptMethod.Aes, ApolloKeyMaking.RawDH, dhp);
 			ApolloResult r = _connector.Connect ();
@@ -427,121 +567,6 @@ namespace TheNextMoba.Network
 		public void Reconnect()
 		{
 			_connector.Reconnect ();
-		}
-
-		public void Close()
-		{
-			if (_connector != null) 
-			{
-				_connector.ConnectEvent -= new ConnectEventHandler (ApolloConnectHandle);
-				_connector.RecvedDataEvent -= new RecvedDataHandler(ApolloRecievedDataEventHandle);
-				_connector.ErrorEvent -= new ConnectorErrorEventHandler (ApolloErrorHandle);
-				_connector.DisconnectEvent -= new DisconnectEventHandler(ApolloDisconnectHandle);
-				_connector.ReconnectEvent -= new ReconnectEventHandler (ApolloReconnectHandle);
-				if (_connector.Connected) 
-				{
-					_connector.Disconnect ();
-				}
-				_connector = null;
-			}
-
-			if (_protocol != null) 
-			{
-				_protocol.Clear ();
-				_protocol = null;
-			}
-		}
-
-		public bool Connected
-		{
-			get { return _connector != null && _connector.Connected; }
-		}
-
-		private void ApolloRecievedDataEventHandle()
-		{
-			ApolloResult result = ApolloResult.Success;
-
-			while (result == ApolloResult.Success) 
-			{
-				byte[] buffer;
-				if (_type == ProtocolType.TCP) 
-				{
-					result = _connector.ReadData (out buffer);
-				}
-				else 
-				{
-					result = _connector.ReadUdpData (out buffer);
-				}
-
-				if (result == ApolloResult.Success) 
-				{
-					ReadConnectionStream (buffer);
-				}
-
-				DispatchConnectEvent (ConnectEventType.READ, result);
-			}
-		}
-
-		private void ReadConnectionStream(byte[] buffer)
-		{
-			if (_protocol.ReadConnectionStream(buffer))
-			{
-				byte[] remain = _protocol.StripRemainBytes ();
-
-				// Deserialize Message
-				Type type = GetTypeByCommand(_protocol.command);
-				if (type != null) 
-				{
-					Debug.Log("[RSP-BODY]command : " + _protocol.command + " message_length : " + _protocol.message.Length + " type : " + type);
-					MemoryStream stream = new MemoryStream(_protocol.message);
-					object message = Serializer.NonGeneric.Deserialize (type, stream);
-					TriggerHandlesWithMessage (_protocol.command, message);
-				}
-
-				_protocol.Clear ();
-				if (remain != null)
-				{
-					ReadConnectionStream (remain);
-				}
-			}
-			else
-			if (_protocol.HeadComplete)
-			{
-//				string msg = string.Format ("[RSP-HEAD]command:{1} uin:{2} index:{3} length:{4}", _protocol.command, _protocol.uin, _protocol.index, _protocol.length);
-				Debug.Log (_protocol.ToString());
-			}
-		}
-
-		//MARK: Connection Events Handle
-		private void ApolloConnectHandle(ApolloResult result, ApolloLoginInfo loginInfo)
-		{
-			DispatchConnectEvent (ConnectEventType.CONNECT, result);
-			Debug.Log (loginInfo);
-		}
-
-		private void ApolloErrorHandle(ApolloResult result)
-		{
-			DispatchConnectEvent (ConnectEventType.ERROR, result);
-		}
-
-		private void ApolloDisconnectHandle(ApolloResult result)
-		{
-			DispatchConnectEvent (ConnectEventType.DISCONNECT, result);
-		}
-
-		private void ApolloReconnectHandle(ApolloResult result)
-		{
-			DispatchConnectEvent (ConnectEventType.RECONNECT, result);
-		}
-
-		private void DispatchConnectEvent(ConnectEventType type, ApolloResult result)
-		{
-			Debug.Log (string.Format ("ConnectEventType.{1} : ApolloResult.{2}", type, result));
-
-			if (_connectHandle != null) 
-			{
-				_connectHandle (type, result);
-			}
 		}
 
 		void OnDestroy()
