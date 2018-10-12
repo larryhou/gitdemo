@@ -376,19 +376,102 @@ namespace TheNextMoba.Network
 			_connectHandler -= handler;
 		}
 
+		//MARK: Connect Operations
+		public void Connect(string ip, uint port, ProtocolType type, string dhp = null)
+		{
+			_type = type;
+			Debug.Log (string.Format ("Connect ProtocolType.{0} ip:{1} port:{2} dhp:{3}", type, ip, port, dhp));
+
+			_sequence = 0;
+			_protocol = new ProtocolPackage ();
+
+			if (dhp == null)
+				dhp = _dhp;
+			
+			if (type == ProtocolType.UDP) 
+			{
+				_connector = IApollo.Instance.CreateApolloConnection (ApolloPlatform.None, "lwip://" + ip + ":" + port);
+			} 
+			else 
+			{
+				_connector = IApollo.Instance.CreateApolloConnection (ApolloPlatform.None, "tcp://" + ip + ":" + port);
+			}
+
+			_connector.ConnectEvent += new ConnectEventHandler (ApolloConnectHandler);
+			_connector.RecvedDataEvent += new RecvedDataHandler(ApolloRecievedDataEventHandler);
+			_connector.ErrorEvent += new ConnectorErrorEventHandler (ApolloErrorHandler);
+			_connector.DisconnectEvent += new DisconnectEventHandler(ApolloDisconnectHandler);
+			_connector.ReconnectEvent += new ReconnectEventHandler (ApolloReconnectHandler);
+
+			_connector.SetSecurityInfo (ApolloEncryptMethod.Aes, ApolloKeyMaking.RawDH, dhp);
+			ApolloResult r = _connector.Connect ();
+			Debug.Log (r);
+		}
+
+		public void Send<T>(ushort command, T message) where T: ProtoBuf.IExtensible
+		{
+			if (!Connected) 
+			{
+				Debug.LogError("Client's not connected!");
+				return;
+			}
+			
+			// Setup Protocol Head
+			ProtocolPackage protocol = new ProtocolPackage();
+			protocol.command = command;
+			protocol.uin = uin;
+			protocol.index = ++_sequence;
+
+			// Serialize Message
+			MemoryStream stream = new MemoryStream ();
+			Serializer.Serialize<T> (stream, message);
+
+			byte[] data = protocol.EncodePackage (stream.GetBuffer ());
+
+			ApolloResult result;
+			if (_type == ProtocolType.TCP) 
+			{
+				result = _connector.WriteData (data);
+			} 
+			else 
+			{
+				result = _connector.WriteUdpData (data);
+			}
+
+			DispatchConnectEvent (ConnectEventType.SEND, result);
+		}
+
+		public void Reconnect()
+		{
+			_connector.Reconnect ();
+		}
+
+		public void Close()
+		{
+			if (_connector != null) 
+			{
+				_connector.ConnectEvent -= new ConnectEventHandler (ApolloConnectHandler);
+				_connector.RecvedDataEvent -= new RecvedDataHandler(ApolloRecievedDataEventHandler);
+				_connector.ErrorEvent -= new ConnectorErrorEventHandler (ApolloErrorHandler);
+				_connector.DisconnectEvent -= new DisconnectEventHandler(ApolloDisconnectHandler);
+				_connector.ReconnectEvent -= new ReconnectEventHandler (ApolloReconnectHandler);
+				if (_connector.Connected) 
+				{
+					_connector.Disconnect ();
+				}
+				_connector = null;
+			}
+
+			if (_protocol != null) 
+			{
+				_protocol.Clear ();
+				_protocol = null;
+			}
+		}
+
 		public bool Connected
 		{
 			get { return _connector != null && _connector.Connected; }
-		}
-
-		private void DispatchConnectEvent(ConnectEventType type, ApolloResult result)
-		{
-			Debug.Log (string.Format ("ConnectEventType.{0} : ApolloResult.{1}", type, result));
-
-			if (_connectHandler != null) 
-			{
-				_connectHandler (type, result);
-			}
 		}
 
 		//MARK: Parsing Data Stream
@@ -476,102 +559,14 @@ namespace TheNextMoba.Network
 			DispatchConnectEvent (ConnectEventType.RECONNECT, result);
 		}
 
-		//MARK: Connect Operations
-		public void Close()
+		private void DispatchConnectEvent(ConnectEventType type, ApolloResult result)
 		{
-			if (_connector != null) 
+			Debug.Log (string.Format ("ConnectEventType.{0} : ApolloResult.{1}", type, result));
+
+			if (_connectHandler != null) 
 			{
-				_connector.ConnectEvent -= new ConnectEventHandler (ApolloConnectHandler);
-				_connector.RecvedDataEvent -= new RecvedDataHandler(ApolloRecievedDataEventHandler);
-				_connector.ErrorEvent -= new ConnectorErrorEventHandler (ApolloErrorHandler);
-				_connector.DisconnectEvent -= new DisconnectEventHandler(ApolloDisconnectHandler);
-				_connector.ReconnectEvent -= new ReconnectEventHandler (ApolloReconnectHandler);
-				if (_connector.Connected) 
-				{
-					_connector.Disconnect ();
-				}
-				_connector = null;
+				_connectHandler (type, result);
 			}
-
-			if (_protocol != null) 
-			{
-				_protocol.Clear ();
-				_protocol = null;
-			}
-		}
-
-		public void Connect(string ip, uint port, ProtocolType type, string dhp = null)
-		{
-			_type = type;
-			Debug.Log (string.Format ("Connect ProtocolType.{0} ip:{1} port:{2} dhp:{3}", type, ip, port, dhp));
-
-			_sequence = 0;
-			_protocol = new ProtocolPackage ();
-
-			if (dhp == null)
-				dhp = _dhp;
-			
-			if (type == ProtocolType.UDP) 
-			{
-				_connector = IApollo.Instance.CreateApolloConnection (ApolloPlatform.None, "lwip://" + ip + ":" + port);
-			} 
-			else 
-			{
-				_connector = IApollo.Instance.CreateApolloConnection (ApolloPlatform.None, "tcp://" + ip + ":" + port);
-			}
-
-			_connector.ConnectEvent += new ConnectEventHandler (ApolloConnectHandler);
-			_connector.RecvedDataEvent += new RecvedDataHandler(ApolloRecievedDataEventHandler);
-			_connector.ErrorEvent += new ConnectorErrorEventHandler (ApolloErrorHandler);
-			_connector.DisconnectEvent += new DisconnectEventHandler(ApolloDisconnectHandler);
-			_connector.ReconnectEvent += new ReconnectEventHandler (ApolloReconnectHandler);
-
-			_connector.SetSecurityInfo (ApolloEncryptMethod.Aes, ApolloKeyMaking.RawDH, dhp);
-			ApolloResult r = _connector.Connect ();
-			Debug.Log (r);
-		}
-
-		public void Send<T>(ushort command, T message) where T: ProtoBuf.IExtensible
-		{
-			if (!Connected) 
-			{
-				Debug.LogError("Client's not connected!");
-				return;
-			}
-			
-			// Setup Protocol Head
-			ProtocolPackage protocol = new ProtocolPackage();
-			protocol.command = command;
-			protocol.uin = uin;
-			protocol.index = ++_sequence;
-
-			// Serialize Message
-			MemoryStream stream = new MemoryStream ();
-			Serializer.Serialize<T> (stream, message);
-
-			byte[] data = protocol.EncodePackage (stream.GetBuffer ());
-
-			ApolloResult result;
-			if (_type == ProtocolType.TCP) 
-			{
-				result = _connector.WriteData (data);
-			} 
-			else 
-			{
-				result = _connector.WriteUdpData (data);
-			}
-
-			DispatchConnectEvent (ConnectEventType.SEND, result);
-		}
-
-		public void Reconnect()
-		{
-			_connector.Reconnect ();
-		}
-
-		void OnDestroy()
-		{
-			Close ();
 		}
 	}
 }
