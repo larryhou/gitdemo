@@ -439,7 +439,7 @@ namespace TheNextMoba.Network
 				byte[] remain = _protocol.StripRemainBytes ();
 				byte[] messageBytes = _protocol.message;
 
-				//TODO: 反序列化
+				// Deserialize Message
 				Type type = GetTypeByCommand(_protocol.command);
 				if (type != null) 
 				{
