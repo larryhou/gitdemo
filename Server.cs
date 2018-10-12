@@ -153,7 +153,9 @@ namespace TheNextMoba.Network
 		{
 			if (_headComplete && _bodyComplete) 
 			{
-				return _remain;
+				byte[] bytes = new byte[_remain.Length];
+				Array.Copy (_remain, bytes, _remain.Length);
+				return bytes;
 			}
 
 			return null;
@@ -171,6 +173,12 @@ namespace TheNextMoba.Network
 			{
 				Array.Clear (_buffer, 0, _buffer.Length);
 				_buffer = null;
+			}
+
+			if (message != null) 
+			{
+				Array.Clear (message, 0, message.Length);
+				message = null;
 			}
 
 			_bytesReceived = 0;
@@ -449,17 +457,22 @@ namespace TheNextMoba.Network
 				_protocol = new ProtocolPackage ();
 			}
 
+			ReadConnectionStream (buffer);
+			DispatchConnectEvent (ConnectEventType.Receive, result);
+		}
+
+		private void ReadConnectionStream(byte[] buffer)
+		{
 			if (_protocol.ReadConnectionStream(buffer))
 			{
 				byte[] remain = _protocol.StripRemainBytes ();
-				byte[] messageBytes = _protocol.message;
 
 				// Deserialize Message
 				Type type = GetTypeByCommand(_protocol.command);
 				if (type != null) 
 				{
-					Debug.Log("[RSP-BODY]command : " + _protocol.command + "message_length : " + messageBytes.Length + " type : " + type);
-					MemoryStream stream = new MemoryStream(messageBytes);
+					Debug.Log("[RSP-BODY]command : " + _protocol.command + "message_length : " + _protocol.message.Length + " type : " + type);
+					MemoryStream stream = new MemoryStream(_protocol.message);
 					object message = Serializer.NonGeneric.Deserialize (type, stream);
 					TriggerHandlesWithMessage (_protocol.command, message);
 				}
@@ -467,7 +480,7 @@ namespace TheNextMoba.Network
 				_protocol.Clear ();
 				if (remain != null)
 				{
-					_protocol.ReadConnectionStream (remain);
+					ReadConnectionStream (remain);
 				}
 			}
 			else
@@ -476,8 +489,6 @@ namespace TheNextMoba.Network
 				string msg = string.Format ("[RSP-HEAD]command:{1} uin:{2} index:{3} length:{4}", _protocol.command, _protocol.uin, _protocol.index, _protocol.length);
 				Debug.Log (msg);
 			}
-
-			DispatchConnectEvent (ConnectEventType.Receive, result);
 		}
 
 		//MARK: Connection Events Handle
