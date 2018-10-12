@@ -62,7 +62,7 @@ namespace TheNextMoba.Network
 
 		override public string ToString()
 		{
-			return string.Format ("ProtocolPackage index:{0} command:0x{1:X}/{1} length:{2} uin:{3} version:{4} appID:{5} zoneID:{6} checksum:{7}", index, command, length, uin, version, appID, zoneID, checksum);
+			return string.Format ("ProtocolPackage index:{0} command:0x{1:X}/{1} length:{2} message_length:{8} uin:{3} version:{4} appID:{5} zoneID:{6} checksum:{7}", index, command, length, uin, version, appID, zoneID, checksum, length - HEAD_LENGTH);
 		}
 
 		public byte[] EncodePackage(byte[] message)
@@ -526,14 +526,14 @@ namespace TheNextMoba.Network
 				if (type != null)
 				{
 					// Deserialize Message
-					Log (string.Format("<< [RSP-BODY]command:0x{0:X}/{0} message_length:{1} type:{2}", _protocol.command, _protocol.message.Length, type));
+					Log (string.Format("Read << {0} type:{1}", _protocol.ToString(), type));
 					MemoryStream stream = new MemoryStream (_protocol.message);
 					message = Serializer.NonGeneric.Deserialize (type, stream);
 				} 
 				else
 				{
 					// Extract Message Raw Bytes
-					Log (string.Format("<< [RSP-BODY]command:0x{0:X}/{0} message_length:{1} type:RAW_BYTES", _protocol.command, _protocol.message.Length));
+					Log (string.Format("Read << {0} type:RAW_BYTES", _protocol.ToString()));
 					message = _protocol.message.Clone ();
 				}
 
@@ -544,10 +544,6 @@ namespace TheNextMoba.Network
 				{
 					ReadConnectionStream (remain);
 				}
-			}
-			else if (_protocol.HeadComplete)
-			{
-				Log ("[RSP-HEAD]" + _protocol.ToString());
 			}
 		}
 
