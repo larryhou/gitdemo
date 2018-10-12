@@ -224,7 +224,7 @@ namespace TheNextMoba.Network
 		private ProtocolPackage _protocol;
 		private ProtocolType _type;
 
-		private Dictionary<ushort, Type> _commandMap = new Dictionary<ushort, Type>();
+		private Dictionary<ushort, Type> _commandRegisterMap = new Dictionary<ushort, Type>();
 		private Dictionary<ushort, NetworkMessageHandle> _messageHandles = new Dictionary<ushort, NetworkMessageHandle>();
 
 		private List<MessageObject> _messages = new List<MessageObject>();
@@ -241,31 +241,31 @@ namespace TheNextMoba.Network
 		public void RegisterCommandType(ushort command, Type type)
 		{
 			Debug.Log("RegisterCommandType : " + command + " type : " + type);
-			if (!_commandMap.ContainsKey (command)) 
+			if (!_commandRegisterMap.ContainsKey (command)) 
 			{
-				_commandMap.Add (command, type);
+				_commandRegisterMap.Add (command, type);
 			}
 			else 
 			{
-				_commandMap [command] = type;
+				_commandRegisterMap [command] = type;
 			}
 		}
 
 		public void UnregisterCommandType(ushort command)
 		{
 			Debug.Log("UnregisterCommandType : " + command);
-			if (_commandMap.ContainsKey (command)) 
+			if (_commandRegisterMap.ContainsKey (command)) 
 			{
-				_commandMap.Remove (command);
+				_commandRegisterMap.Remove (command);
 			}
 		}
 
 		public Type GetTypeByCommand(ushort command)
 		{
 			Debug.Log("GetTypeByCommand : " + command);
-			if (_commandMap.ContainsKey(command))
+			if (_commandRegisterMap.ContainsKey(command))
 			{
-				return _commandMap [command];
+				return _commandRegisterMap [command];
 			}
 
 			return null;
