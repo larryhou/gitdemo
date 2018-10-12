@@ -356,7 +356,9 @@ namespace TheNextMoba.Network
 		public void Connect(string ip, int port, ProtocolType type = ProtocolType.UDP, string dhp = null)
 		{
 			_type = type;
+
 			_sequence = 0;
+			_protocol = new ProtocolPackage ();
 
 			if (dhp == null)
 				dhp = _dhp;
@@ -449,25 +451,27 @@ namespace TheNextMoba.Network
 
 		private void ApolloRecievedDataEventHandle()
 		{
-			byte[] buffer;
+			ApolloResult result = ApolloResult.Success;
 
-			ApolloResult result;
-			if (_type == ProtocolType.TCP) 
+			while (result == ApolloResult.Success) 
 			{
-				result = _connector.ReadData (out buffer);
-			}
-			else 
-			{
-				result = _connector.ReadUdpData (out buffer);
-			}
+				byte[] buffer;
+				if (_type == ProtocolType.TCP) 
+				{
+					result = _connector.ReadData (out buffer);
+				}
+				else 
+				{
+					result = _connector.ReadUdpData (out buffer);
+				}
 
-			if (_protocol == null) 
-			{
-				_protocol = new ProtocolPackage ();
-			}
+				if (result == ApolloResult.Success) 
+				{
+					ReadConnectionStream (buffer);
+				}
 
-			ReadConnectionStream (buffer);
-			DispatchConnectEvent (ConnectEventType.Receive, result);
+				DispatchConnectEvent (ConnectEventType.Receive, result);
+			}
 		}
 
 		private void ReadConnectionStream(byte[] buffer)
