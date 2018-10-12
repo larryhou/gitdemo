@@ -20,7 +20,7 @@ namespace TheNextMoba.Network
 
 	public enum ConnectEventType:int
 	{
-		Connect = 0, Send, Read, Error, Reconnect, Disconnect
+		CONNECT = 0, SEND, READ, ERROR, RECONNECT, DISCONNECT
 	}
 
 	public class MessageObject
@@ -43,6 +43,11 @@ namespace TheNextMoba.Network
 		public UInt32 index;	// 4B
 
 		public byte[] message;
+
+		public string ToString()
+		{
+			return string.Format ("ProtocolPackage index:{1} command:{2:X} length:{3} uin:{4} version:{5} appID:{6} zoneID:{7} checksum:{8}", index, command, length, uin, version, appID, zoneID, checksum);
+		}
 
 		public byte[] EncodePackage(byte[] message)
 		{
@@ -357,6 +362,7 @@ namespace TheNextMoba.Network
 		public void Connect(string ip, int port, ProtocolType type = ProtocolType.UDP, string dhp = null)
 		{
 			_type = type;
+			Debug.Log (string.Format ("Connect ProtocolType.{1} ip:{2} port:{3} dhp:{4 }", type, ip, port, dhp));
 
 			_sequence = 0;
 			_protocol = new ProtocolPackage ();
@@ -414,7 +420,7 @@ namespace TheNextMoba.Network
 				result = _connector.WriteUdpData (data);
 			}
 
-			DispatchConnectEvent (ConnectEventType.Send, result);
+			DispatchConnectEvent (ConnectEventType.SEND, result);
 		}
 
 		public void Reconnect()
@@ -471,7 +477,7 @@ namespace TheNextMoba.Network
 					ReadConnectionStream (buffer);
 				}
 
-				DispatchConnectEvent (ConnectEventType.Read, result);
+				DispatchConnectEvent (ConnectEventType.READ, result);
 			}
 		}
 
@@ -500,36 +506,36 @@ namespace TheNextMoba.Network
 			else
 			if (_protocol.HeadComplete)
 			{
-				string msg = string.Format ("[RSP-HEAD]command:{1} uin:{2} index:{3} length:{4}", _protocol.command, _protocol.uin, _protocol.index, _protocol.length);
-				Debug.Log (msg);
+//				string msg = string.Format ("[RSP-HEAD]command:{1} uin:{2} index:{3} length:{4}", _protocol.command, _protocol.uin, _protocol.index, _protocol.length);
+				Debug.Log (_protocol.ToString());
 			}
 		}
 
 		//MARK: Connection Events Handle
 		private void ApolloConnectHandle(ApolloResult result, ApolloLoginInfo loginInfo)
 		{
-			DispatchConnectEvent (ConnectEventType.Connect, result);
+			DispatchConnectEvent (ConnectEventType.CONNECT, result);
 			Debug.Log (loginInfo);
 		}
 
 		private void ApolloErrorHandle(ApolloResult result)
 		{
-			DispatchConnectEvent (ConnectEventType.Error, result);
+			DispatchConnectEvent (ConnectEventType.ERROR, result);
 		}
 
 		private void ApolloDisconnectHandle(ApolloResult result)
 		{
-			DispatchConnectEvent (ConnectEventType.Disconnect, result);
+			DispatchConnectEvent (ConnectEventType.DISCONNECT, result);
 		}
 
 		private void ApolloReconnectHandle(ApolloResult result)
 		{
-			DispatchConnectEvent (ConnectEventType.Reconnect, result);
+			DispatchConnectEvent (ConnectEventType.RECONNECT, result);
 		}
 
 		private void DispatchConnectEvent(ConnectEventType type, ApolloResult result)
 		{
-			Debug.Log (type + ":" + result);
+			Debug.Log (string.Format ("ConnectEventType.{1} : ApolloResult.{2}", type, result));
 
 			if (_connectHandle != null) 
 			{
