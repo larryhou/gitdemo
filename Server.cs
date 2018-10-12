@@ -28,6 +28,17 @@ namespace TheNextMoba.Network
 		public const uint MAX_RETRY_NUM = 3;
 	}
 
+	public static class ApolloExtensions
+	{
+		public static string FormattedString(this ApolloLoginInfo info)
+		{
+			string account = string.Format ("AccountInfo{{platform:{0} channel:{1} openid:{2}}}", info.AccountInfo.Platform, info.AccountInfo.Channel, info.AccountInfo.OpenId);
+			string waiting = string.Format ("WaitingInfo{{pos:{0} queue_len:{1} estimate_time:{2}}}", info.WaitingInfo.Pos, info.WaitingInfo.QueueLen, info.WaitingInfo.EstimateTime);
+			string server = string.Format ("ServerInfo{{route_type:{0} server_id:{1}}} ip:{2}", info.ServerInfo.RouteType, info.ServerInfo.ServerId, info.CurrentIp);
+			return string.Format ("[{3:HH:mm:ss.fff} ApolloLoginInfo]{0} {1} {2}", account, waiting, server, DateTime.Now);
+		}
+	}
+
 	public class MessageObject
 	{
 		public ushort command;
@@ -69,7 +80,6 @@ namespace TheNextMoba.Network
 			EncodeUInt16 (checksum	, result, ref position);
 			EncodeUInt32 (index		, result, ref position);
 
-			Assert.AreEqual (HEAD_LENGTH, (uint)result.Length);
 			Assert.AreEqual (HEAD_LENGTH, position);
 
 			Array.Copy (message, 0, result, position, message.Length);
@@ -167,7 +177,10 @@ namespace TheNextMoba.Network
 		{
 			if (_headComplete && _bodyComplete) 
 			{
-				return _remain.Clone() as byte[];
+				if (_remain != null)
+				{
+					return _remain.Clone() as byte[];
+				}
 			}
 
 			return null;
@@ -268,7 +281,7 @@ namespace TheNextMoba.Network
 		//MARK: Manage Command Registers
 		public void RegisterCommandType(ushort command, Type type)
 		{
-			Debug.Log("RegisterCommandType : " + command + " type : " + type);
+			Log("RegisterCommandType : " + command + " type : " + type);
 			if (!_commandRegisterMap.ContainsKey (command)) 
 			{
 				_commandRegisterMap.Add (command, type);
@@ -281,7 +294,7 @@ namespace TheNextMoba.Network
 
 		public void UnregisterCommandType(ushort command)
 		{
-			Debug.Log("UnregisterCommandType : " + command);
+			Log("UnregisterCommandType : " + command);
 			if (_commandRegisterMap.ContainsKey (command)) 
 			{
 				_commandRegisterMap.Remove (command);
@@ -290,7 +303,7 @@ namespace TheNextMoba.Network
 
 		public Type GetTypeByCommand(ushort command)
 		{
-			Debug.Log("GetTypeByCommand : " + command);
+			Log("GetTypeByCommand : " + command);
 			if (_commandRegisterMap.ContainsKey(command))
 			{
 				return _commandRegisterMap [command];
@@ -380,7 +393,7 @@ namespace TheNextMoba.Network
 		public void Connect(string ip, uint port, ProtocolType type, string dhp = null)
 		{
 			_type = type;
-			Debug.Log (string.Format ("Connect ProtocolType.{0} ip:{1} port:{2} dhp:{3}", type, ip, port, dhp));
+			Log (string.Format ("Connect ProtocolType.{0} ip:{1} port:{2} dhp:{3}", type, ip, port, dhp));
 
 			_sequence = 0;
 			_protocol = new ProtocolPackage ();
@@ -403,9 +416,9 @@ namespace TheNextMoba.Network
 			_connector.DisconnectEvent += new DisconnectEventHandler(ApolloDisconnectHandler);
 			_connector.ReconnectEvent += new ReconnectEventHandler (ApolloReconnectHandler);
 
-			_connector.SetSecurityInfo (ApolloEncryptMethod.Aes, ApolloKeyMaking.RawDH, dhp);
+			_connector.SetSecurityInfo (ApolloEncryptMethod.None, ApolloKeyMaking.None, dhp);
 			ApolloResult r = _connector.Connect ();
-			Debug.Log (r);
+			Log (string.Format ("Connect... ApolloResult.{0}", r));
 		}
 
 		public void Send<T>(ushort command, T message) where T: ProtoBuf.IExtensible
@@ -427,6 +440,7 @@ namespace TheNextMoba.Network
 			Serializer.Serialize<T> (stream, message);
 
 			byte[] data = protocol.EncodePackage (stream.GetBuffer ());
+			Log ("Send " + protocol.ToString ());
 
 			ApolloResult result;
 			if (_type == ProtocolType.TCP) 
@@ -512,14 +526,14 @@ namespace TheNextMoba.Network
 				if (type != null)
 				{
 					// Deserialize Message
-					Debug.Log ("[RSP-BODY]command : " + _protocol.command + " message_length : " + _protocol.message.Length + " type : " + type);
+					Log ("[RSP-BODY]command : " + _protocol.command + " message_length : " + _protocol.message.Length + " type : " + type);
 					MemoryStream stream = new MemoryStream (_protocol.message);
 					message = Serializer.NonGeneric.Deserialize (type, stream);
 				} 
 				else
 				{
 					// Extract Message Raw Bytes
-					Debug.Log ("[RSP-BODY]command : " + _protocol.command + " message_length : " + _protocol.message.Length + " type : RAW_BYTES");
+					Log ("[RSP-BODY]command : " + _protocol.command + " message_length : " + _protocol.message.Length + " type : RAW_BYTES");
 					message = _protocol.message.Clone ();
 				}
 
@@ -533,7 +547,7 @@ namespace TheNextMoba.Network
 			}
 			else if (_protocol.HeadComplete)
 			{
-				Debug.Log ("[RSP-HEAD]" + _protocol.ToString());
+				Log ("[RSP-HEAD]" + _protocol.ToString());
 			}
 		}
 
@@ -541,7 +555,7 @@ namespace TheNextMoba.Network
 		private void ApolloConnectHandler(ApolloResult result, ApolloLoginInfo loginInfo)
 		{
 			DispatchConnectEvent (ConnectEventType.CONNECT, result);
-			Debug.Log (loginInfo);
+			Debug.Log (loginInfo.FormattedString ());
 		}
 
 		private void ApolloErrorHandler(ApolloResult result)
@@ -561,12 +575,17 @@ namespace TheNextMoba.Network
 
 		private void DispatchConnectEvent(ConnectEventType type, ApolloResult result)
 		{
-			Debug.Log (string.Format ("ConnectEventType.{0} : ApolloResult.{1}", type, result));
+			Log (string.Format ("ConnectEventType.{0} ApolloResult.{1}", type, result));
 
 			if (_connectHandler != null) 
 			{
 				_connectHandler (type, result);
 			}
+		}
+
+		private void Log(string message)
+		{
+			Debug.Log (string.Format ("[{0:HH:mm:ss.fff} {1}] {2}", DateTime.Now, typeof(Y), message));
 		}
 	}
 }
