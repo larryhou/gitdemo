@@ -10,7 +10,7 @@ using Apollo;
 
 namespace TheNextMoba.Network
 {
-	public delegate void ConnectHandler(ConnectEventType type, ApolloResult result);
+	public delegate void ConnectHandle(ConnectEventType type, ApolloResult result);
 	public delegate void NetworkMessageHandle(object message);
 
 	public enum ProtocolType:int
@@ -44,9 +44,9 @@ namespace TheNextMoba.Network
 
 		public byte[] message;
 
-		public string ToString()
+		override public string ToString()
 		{
-			return string.Format ("ProtocolPackage index:{1} command:{2:X} length:{3} uin:{4} version:{5} appID:{6} zoneID:{7} checksum:{8}", index, command, length, uin, version, appID, zoneID, checksum);
+			return string.Format ("ProtocolPackage index:{0} command:0x{1:X}/{1} length:{2} uin:{3} version:{4} appID:{5} zoneID:{6} checksum:{7}", index, command, length, uin, version, appID, zoneID, checksum);
 		}
 
 		public byte[] EncodePackage(byte[] message)
@@ -362,7 +362,7 @@ namespace TheNextMoba.Network
 		public void Connect(string ip, int port, ProtocolType type = ProtocolType.UDP, string dhp = null)
 		{
 			_type = type;
-			Debug.Log (string.Format ("Connect ProtocolType.{1} ip:{2} port:{3} dhp:{4 }", type, ip, port, dhp));
+			Debug.Log (string.Format ("Connect ProtocolType.{0} ip:{1} port:{2} dhp:{3}", type, ip, port, dhp));
 
 			_sequence = 0;
 			_protocol = new ProtocolPackage ();
@@ -506,8 +506,7 @@ namespace TheNextMoba.Network
 			else
 			if (_protocol.HeadComplete)
 			{
-//				string msg = string.Format ("[RSP-HEAD]command:{1} uin:{2} index:{3} length:{4}", _protocol.command, _protocol.uin, _protocol.index, _protocol.length);
-				Debug.Log (_protocol.ToString());
+				Debug.Log ("[RSP-HEAD]" + _protocol.ToString());
 			}
 		}
 
@@ -535,7 +534,7 @@ namespace TheNextMoba.Network
 
 		private void DispatchConnectEvent(ConnectEventType type, ApolloResult result)
 		{
-			Debug.Log (string.Format ("ConnectEventType.{1} : ApolloResult.{2}", type, result));
+			Debug.Log (string.Format ("ConnectEventType.{0} : ApolloResult.{1}", type, result));
 
 			if (_connectHandle != null) 
 			{
