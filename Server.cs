@@ -222,8 +222,9 @@ namespace TheNextMoba.Network
 		}
 	}
 
-	public class Server<T>:SingletonMono<T> where T:Server<T>
-	{
+//	public class SingletonMono<T> : MonoBehaviour, ISingleton<T> where T : SingletonMono<T>
+	public class Server///<T> where T : Server<T>
+	{	
 		private IApolloConnector _connector;
 		private string _dhp = "C0FC17D2ADC0007C512E9B6187823F559595D953C82D3D4F281D5198E86C79DF14FAB1F2A901F909FECB71B147DBD265837A254B204D1B5BC5FD64BF804DCD03";
 
@@ -244,6 +245,21 @@ namespace TheNextMoba.Network
 			ApolloInfo info = new ApolloInfo (102400);
 			IApollo.Instance.Initialize (info);
 		}
+
+		//MARK: Singleton Implements
+//		protected static Server _insance;
+//		public static Server Instance
+//		{
+//			get 
+//			{
+//				if (_insance == null)
+//				{
+//					_insance = new T ();
+//				}
+//
+//				return _insance;
+//			}
+//		}
 
 		//MARK: Manage Command Registers
 		public void RegisterCommandType(ushort command, Type type)
