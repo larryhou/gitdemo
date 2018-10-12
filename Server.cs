@@ -11,7 +11,7 @@ using Apollo;
 namespace TheNextMoba.Network
 {
 	public delegate void NetworkConnectHandler(ConnectEventType type, ApolloResult result);
-	public delegate void NetworkMessageHandler<T>(T message);
+	public delegate void NetworkMessageHandler(object message);
 
 	public enum ProtocolType:int
 	{
