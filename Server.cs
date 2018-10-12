@@ -38,6 +38,11 @@ namespace TheNextMoba.Network
 				_connector = IApollo.Instance.CreateApolloConnection (ApolloPlatform.None, "tcp://" + ip + ":" + port);
 			}
 
+			_connector.ConnectEvent += (ApolloResult result, ApolloLoginInfo loginInfo) => 
+			{
+				
+			};
+
 			_connector.SetSecurityInfo (ApolloEncryptMethod.Aes, ApolloKeyMaking.RawDH, dhp);
 			ApolloResult result = _connector.Connect ();
 			Debug.Log (result);
