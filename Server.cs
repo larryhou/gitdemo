@@ -15,12 +15,17 @@ namespace TheNextMoba.Network
 
 	public enum ProtocolType:int
 	{
-		TCP = 0,UDP
+		TCP = 0,UDP = 1
 	}
 
 	public enum ConnectEventType:int
 	{
 		CONNECT = 0, SEND, READ, ERROR, RECONNECT, DISCONNECT
+	}
+
+	public class NetworkVars
+	{
+		public const uint MAX_RETRY_NUM = 3;
 	}
 
 	public class MessageObject
@@ -222,7 +227,7 @@ namespace TheNextMoba.Network
 		}
 	}
 
-	public class Server<Y> where Y : Server<Y>, new()
+	public class Server//<Y> where Y : Server<Y>, new()
 	{	
 		private IApolloConnector _connector;
 		private string _dhp = "C0FC17D2ADC0007C512E9B6187823F559595D953C82D3D4F281D5198E86C79DF14FAB1F2A901F909FECB71B147DBD265837A254B204D1B5BC5FD64BF804DCD03";
@@ -246,19 +251,19 @@ namespace TheNextMoba.Network
 		}
 
 		//MARK: Singleton Implements
-		protected static Y _insance;
-		public static Y Instance
-		{
-			get 
-			{
-				if (_insance == null)
-				{
-					_insance = new Y ();
-				}
-
-				return _insance;
-			}
-		}
+//		protected static Y _insance;
+//		public static Y Instance
+//		{
+//			get 
+//			{
+//				if (_insance == null)
+//				{
+//					_insance = new Y ();
+//				}
+//
+//				return _insance;
+//			}
+//		}
 
 		//MARK: Manage Command Registers
 		public void RegisterCommandType(ushort command, Type type)
@@ -495,7 +500,7 @@ namespace TheNextMoba.Network
 			}
 		}
 
-		public void Connect(string ip, int port, ProtocolType type = ProtocolType.UDP, string dhp = null)
+		public void Connect(string ip, int port, ProtocolType type, string dhp = null)
 		{
 			_type = type;
 			Debug.Log (string.Format ("Connect ProtocolType.{0} ip:{1} port:{2} dhp:{3}", type, ip, port, dhp));
