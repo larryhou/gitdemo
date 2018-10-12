@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Xml.Serialization;
 using UnityEngine;
 using UnityEngine.Assertions;
 using System.Collections;
@@ -28,7 +29,7 @@ namespace TheNextMoba.Network
 		public const uint MAX_RETRY_NUM = 3;
 	}
 
-	public static class ApolloExtensions
+	public static class ServerUtils
 	{
 		public static string FormattedString(this ApolloLoginInfo info)
 		{
@@ -36,6 +37,32 @@ namespace TheNextMoba.Network
 			string waiting = string.Format ("WaitingInfo{{pos:{0} queue_len:{1} estimate_time:{2}}}", info.WaitingInfo.Pos, info.WaitingInfo.QueueLen, info.WaitingInfo.EstimateTime);
 			string server = string.Format ("ServerInfo{{route_type:{0} server_id:{1}}} ip:{2}", info.ServerInfo.RouteType, info.ServerInfo.ServerId, info.CurrentIp);
 			return string.Format ("[{3:HH:mm:ss.fff} ApolloLoginInfo]{0} {1} {2}", account, waiting, server, DateTime.Now);
+		}
+
+		public static byte[] ToByteArray(this string str)
+		{
+			return System.Text.Encoding.UTF8.GetBytes (str);
+		}
+
+		public static string ToUTF8String(this byte[] bytes)
+		{
+			return System.Text.Encoding.UTF8.GetString (bytes);
+		}
+
+		public static string ToHexString(this byte[] bytes)
+		{
+			return BitConverter.ToString (bytes).Replace ("-", "");
+		}
+
+		public static string FormattedString(this global::ProtoBuf.IExtensible proto)
+		{
+			XmlSerializer serializer = new XmlSerializer(proto.GetType());
+
+			using(StringWriter writer = new StringWriter())
+			{
+				serializer.Serialize(writer, proto);
+				return writer.ToString();
+			}
 		}
 	}
 
@@ -60,7 +87,7 @@ namespace TheNextMoba.Network
 
 		public byte[] message;
 
-		override public string ToString()
+		public string FormattedString()
 		{
 			return string.Format ("ProtocolPackage index:{0} command:0x{1:X}/{1} length:{2} message_length:{8} uin:{3} version:{4} appID:{5} zoneID:{6} checksum:{7}", index, command, length, uin, version, appID, zoneID, checksum, length - HEAD_LENGTH);
 		}
@@ -173,7 +200,7 @@ namespace TheNextMoba.Network
 		public bool HeadComplete{ get { return _headComplete; } }
 		public bool BodyComplete{ get { return _bodyComplete; } }
 
-		public byte[] StripRemainBytes()
+		public byte[] StripRemainByteArray()
 		{
 			if (_headComplete && _bodyComplete) 
 			{
@@ -184,6 +211,11 @@ namespace TheNextMoba.Network
 			}
 
 			return null;
+		}
+
+		public byte[] StripPackageByteArray()
+		{
+			return _buffer;
 		}
 
 		public void Clear()
@@ -240,7 +272,7 @@ namespace TheNextMoba.Network
 		}
 	}
 
-	public class Server<Y> where Y : Server<Y>, new()
+	public class Server<Y,E> where Y : Server<Y,E>, new()
 	{	
 		private IApolloConnector _connector;
 		private string _dhp = "C0FC17D2ADC0007C512E9B6187823F559595D953C82D3D4F281D5198E86C79DF14FAB1F2A901F909FECB71B147DBD265837A254B204D1B5BC5FD64BF804DCD03";
@@ -336,43 +368,23 @@ namespace TheNextMoba.Network
 		//MARK: Trigger Message Handlers
 		private void TriggerHandlesWithMessage(ushort command, object message)
 		{
-			lock (_messages)
-			{
-				MessageObject msg = new MessageObject ();
-				msg.command = command;
-				msg.message = message;
-				_messages.Add(msg);
-			}
-		}
+			MessageObject msg = new MessageObject ();
+			msg.command = command;
+			msg.message = message;
 
-		public void Update()
-		{
-			lock (_messages) 
+			NetworkMessageHandler handle;
+			if (_messageHandles.TryGetValue (msg.command, out handle)) 
 			{
-				if (_messages.Count > 0) 
+				try
 				{
-					for (int i = 0; i < _messages.Count; i++) 
+					if (handle != null)
 					{
-						MessageObject msg = _messages [i];
-
-						NetworkMessageHandler handle;
-						if (_messageHandles.TryGetValue (msg.command, out handle)) 
-						{
-							try
-							{
-								if (handle != null)
-								{
-									handle(msg.message);
-								}
-							}
-							catch (Exception e)
-							{
-								Debug.LogWarning("TriggerHandlesWithMessage exception : " + e.Message + "  stackTrace : " + e.StackTrace);
-							}
-						}
+						handle(msg.message);
 					}
-
-					_messages.Clear ();
+				}
+				catch (Exception e)
+				{
+					Debug.LogWarning("TriggerHandlesWithMessage exception : " + e.Message + "  stackTrace : " + e.StackTrace);
 				}
 			}
 		}
@@ -439,8 +451,11 @@ namespace TheNextMoba.Network
 			MemoryStream stream = new MemoryStream ();
 			Serializer.Serialize<T> (stream, message);
 
-			byte[] data = protocol.EncodePackage (stream.GetBuffer ());
-			Log ("Send >> " + protocol.ToString ());
+			byte[] data = protocol.EncodePackage (stream.ToArray());
+
+			// Log Raw Bytes of Sent Message
+			Log (string.Format("send >> {0} \n {1}", protocol.FormattedString (), message.FormattedString ()));
+//			Log (string.Format ("raw_bytes: \n {0}", data.ToHexString ()));
 
 			ApolloResult result;
 			if (_type == ProtocolType.TCP) 
@@ -518,7 +533,7 @@ namespace TheNextMoba.Network
 		{
 			if (_protocol.ReadConnectionStream(buffer))
 			{
-				byte[] remain = _protocol.StripRemainBytes ();
+				byte[] remain = _protocol.StripRemainByteArray ();
 
 				Type type = GetTypeByCommand(_protocol.command);
 
@@ -526,14 +541,16 @@ namespace TheNextMoba.Network
 				if (type != null)
 				{
 					// Deserialize Message
-					Log (string.Format("Read << {0} type:{1}", _protocol.ToString(), type));
 					MemoryStream stream = new MemoryStream (_protocol.message);
 					message = Serializer.NonGeneric.Deserialize (type, stream);
+
+					Log (string.Format("read << {0} type:{1} \n {2}", _protocol.FormattedString(), type, (message as ProtoBuf.IExtensible).FormattedString()));
+//					Log (string.Format ("raw_bytes: \n {0}", _protocol.message.ToHexString ()));
 				} 
 				else
 				{
 					// Extract Message Raw Bytes
-					Log (string.Format("Read << {0} type:RAW_BYTES", _protocol.ToString()));
+					Log (string.Format("read << {0} type:RAW_BYTES \n ${1}", _protocol.FormattedString(), _protocol.message.ToHexString()));
 					message = _protocol.message.Clone ();
 				}
 
