@@ -226,6 +226,7 @@ namespace TheNextMoba.Network
 		private ConnectHandle _connectHandle;
 		private ProtocolPackage _protocol;
 		private ProtocolType _type;
+		private uint _sequence;
 
 		private Dictionary<ushort, Type> _commandRegisterMap = new Dictionary<ushort, Type>();
 		private Dictionary<ushort, NetworkMessageHandle> _messageHandles = new Dictionary<ushort, NetworkMessageHandle>();
@@ -355,6 +356,7 @@ namespace TheNextMoba.Network
 		public void Connect(string ip, int port, ProtocolType type = ProtocolType.UDP, string dhp = null)
 		{
 			_type = type;
+			_sequence = 0;
 
 			if (dhp == null)
 				dhp = _dhp;
@@ -391,6 +393,7 @@ namespace TheNextMoba.Network
 			ProtocolPackage protocol = new ProtocolPackage();
 			protocol.command = command;
 			protocol.uin = uin;
+			protocol.index = ++_sequence;
 
 			// Serialize Message
 			MemoryStream stream = new MemoryStream ();
