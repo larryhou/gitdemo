@@ -482,7 +482,7 @@ namespace TheNextMoba.Network
 			DispatchConnectEvent (ConnectEventType.Disconnect, result);
 		}
 
-		private void ApolloReconnectHandle()
+		private void ApolloReconnectHandle(ApolloResult result)
 		{
 			DispatchConnectEvent (ConnectEventType.Reconnect, result);
 		}
