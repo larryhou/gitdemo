@@ -99,7 +99,7 @@ namespace TheNextMoba.Network
 
 			_bytesReceived += (uint)data.Length;
 
-			byte[] bytes = new byte[1];
+			byte[] bytes = null;
 			if (!_headComplete)
 			{
 				if (_bytesReceived >= HEAD_LENGTH) 
