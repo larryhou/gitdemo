@@ -99,22 +99,18 @@ namespace TheNextMoba.Network
 
 			_bytesReceived += (uint)data.Length;
 
-			byte[] bytes = null;
 			if (!_headComplete)
 			{
 				if (_bytesReceived >= HEAD_LENGTH) 
 				{
-					bytes = new byte[_bytesReceived];
+					byte[] bytes = new byte[HEAD_LENGTH];
 					Array.Copy (_buffer, 0, bytes, 0, _buffer.Length);
-					Array.Copy (data, 0, bytes, _buffer.Length, data.Length);
+					Array.Copy (data, 0, bytes, position, HEAD_LENGTH - position);
 
 					ReadPackageHead (bytes);
 					_headComplete = true;
 
-					byte[] buffer = new byte[length];
-					Array.Copy (bytes, 0, buffer, 0, Math.Min (_bytesReceived, length));
-
-					_buffer = buffer;
+					Array.Clear (bytes, 0, bytes.Length);
 				} 
 				else 
 				{
@@ -124,6 +120,17 @@ namespace TheNextMoba.Network
 
 			if (_headComplete)
 			{
+				if (_buffer.Length == HEAD_LENGTH)
+				{
+					byte[] buffer = new byte[length];
+					Array.Copy (_buffer, buffer, _buffer.Length);
+					Array.Clear (_buffer, 0, _buffer.Length);
+
+					_buffer = buffer;
+				}
+
+				Array.Copy (data, 0, _buffer, position, Math.Min (data.Length, length - position));
+
 				if (_bytesReceived >= length) 
 				{
 					_bodyComplete = true;
@@ -134,12 +141,8 @@ namespace TheNextMoba.Network
 					if (_bytesReceived > length)
 					{
 						_remain = new byte[_bytesReceived - length];
-						Array.Copy (bytes, length, _remain, 0, _remain.Length);
+						Array.Copy (data, length - position, _remain, 0, _remain.Length);
 					}
-				} 
-				else
-				{
-					Array.Copy (data, 0, _buffer, position, data.Length);
 				}
 			}
 
